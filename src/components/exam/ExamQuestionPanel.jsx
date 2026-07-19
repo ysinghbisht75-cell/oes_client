@@ -27,19 +27,19 @@ export default function ExamQuestionPanel({
             </div>
             <p className="mt-3 font-medium text-slate-800">{currentQuestion.text}</p>
             <div className="mt-4 grid gap-2 sm:grid-cols-2">
-              {currentQuestion.options.map((option, optionIndex) => (
+              {(currentQuestion.randomizedOptions || []).map((option) => (
                 <label
                   className="flex cursor-pointer items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 hover:border-teal-300 hover:bg-teal-50"
-                  key={option}
+                  key={`${currentQuestion.id}-${option.originalIndex}`}
                 >
                   <input
-                    checked={String(answers[currentQuestion.id]) === String(optionIndex)}
+                    checked={String(answers[currentQuestion.id]) === String(option.originalIndex)}
                     className="h-4 w-4 accent-teal-700"
                     name={`question-${currentQuestion.id}`}
-                    onChange={() => handleAnswerChange(currentQuestion.id, optionIndex)}
+                    onChange={() => handleAnswerChange(currentQuestion.id, option.originalIndex)}
                     type="radio"
                   />
-                  <span>{option}</span>
+                  <span>{option.text}</span>
                 </label>
               ))}
             </div>

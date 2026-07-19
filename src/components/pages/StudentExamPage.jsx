@@ -7,6 +7,7 @@ import ExamStatusAlerts from '../exam/ExamStatusAlerts.jsx'
 import FocusLockOverlay from '../exam/FocusLockOverlay.jsx'
 import { logProctorEvent } from '../../services/proctorService.js'
 import { useExamProtection } from '../../utils/examProtection.js'
+import { randomizeExamQuestions } from '../../utils/randomizeExam.js'
 
 export default function StudentExamPage({ exams, onSubmitResult, questions, results = [], user }) {
   const { examId } = useParams()
@@ -47,9 +48,15 @@ export default function StudentExamPage({ exams, onSubmitResult, questions, resu
     videoRef,
   } = useExamProtection({ onViolation: recordViolation })
 
-  const activeQuestions = activeExam
-    ? questions.filter((question) => (activeExam.questionIds || []).includes(question.id))
-    : []
+  const activeQuestions = useMemo(
+    () =>
+      activeExam
+        ? randomizeExamQuestions(
+            questions.filter((question) => (activeExam.questionIds || []).includes(question.id)),
+          )
+        : [],
+    [activeExam, questions],
+  )
   const currentQuestion = activeQuestions[currentQuestionIndex] || null
 
   const hasAlreadyTaken = useMemo(
