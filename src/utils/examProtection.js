@@ -5,12 +5,14 @@ export function useExamProtection({ onViolation } = {}) {
   const [hasTabSwitchViolation, setHasTabSwitchViolation] = useState(false)
   const [cameraReady, setCameraReady] = useState(false)
   const [cameraError, setCameraError] = useState('')
+  const [latestViolation, setLatestViolation] = useState(null)
   const videoRef = useRef(null)
   const streamRef = useRef(null)
   const lastEventAtRef = useRef({})
   const onViolationRef = useRef(onViolation)
   const lastFrameSignatureRef = useRef('')
   const repeatedFrameCountRef = useRef(0)
+  const blockedFrameCountRef = useRef(0)
 
   useEffect(() => {
     onViolationRef.current = onViolation
@@ -25,6 +27,7 @@ export function useExamProtection({ onViolation } = {}) {
     }
 
     lastEventAtRef.current[eventType] = now
+    setLatestViolation({ details, eventType, occurredAt: new Date().toISOString() })
 
     if (onViolationRef.current) {
       onViolationRef.current(eventType, details).catch(() => {})
@@ -163,20 +166,35 @@ export function useExamProtection({ onViolation } = {}) {
       context.drawImage(video, 0, 0, width, height)
       const pixels = context.getImageData(0, 0, width, height).data
       let brightnessTotal = 0
+      let brightnessSquaredTotal = 0
       let signature = ''
+      let samples = 0
 
       for (let index = 0; index < pixels.length; index += 16) {
         const brightness = Math.round((pixels[index] + pixels[index + 1] + pixels[index + 2]) / 3)
         brightnessTotal += brightness
+        brightnessSquaredTotal += brightness * brightness
         signature += Math.round(brightness / 16).toString(16)
+        samples += 1
       }
 
-      const averageBrightness = brightnessTotal / (pixels.length / 16)
+      const averageBrightness = brightnessTotal / samples
+      const brightnessVariance = brightnessSquaredTotal / samples - averageBrightness * averageBrightness
+      const looksCovered = averageBrightness < 25 || brightnessVariance < 35
 
-      if (averageBrightness < 6) {
+      if (looksCovered) {
+        blockedFrameCountRef.current += 1
+      } else {
+        blockedFrameCountRef.current = 0
+      }
+
+      if (blockedFrameCountRef.current >= 2) {
         setCameraReady(false)
         setCameraError('Camera feed is too dark or blocked.')
-        reportViolation('camera_blocked')
+        reportViolation(
+          'camera_blocked',
+          `brightness:${Math.round(averageBrightness)}, variance:${Math.round(brightnessVariance)}`,
+        )
         return
       }
 
@@ -210,7 +228,7 @@ export function useExamProtection({ onViolation } = {}) {
     window.addEventListener('beforeunload', handleBeforeUnload)
     void enterFullscreen()
     void setupCamera()
-    const cameraMonitorId = window.setInterval(monitorCamera, 3000)
+    const cameraMonitorId = window.setInterval(monitorCamera, 1000)
 
     return () => {
       document.removeEventListener('fullscreenchange', handleFullscreenChange)
@@ -245,6 +263,7 @@ export function useExamProtection({ onViolation } = {}) {
     cameraReady,
     hasTabSwitchViolation,
     isFullscreen,
+    latestViolation,
     requestFullscreenAgain,
     videoRef,
   }
