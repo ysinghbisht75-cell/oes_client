@@ -9,17 +9,21 @@ export default function StudentExamPage({ exams, onSubmitResult, questions, resu
   const [answers, setAnswers] = useState({})
   const [feedback, setFeedback] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [proctorEvents, setProctorEvents] = useState([])
 
   const recordViolation = async (eventType, details = '') => {
     if (!activeExam || !(user?.email || '').trim()) {
       return
     }
 
+    const occurredAt = new Date().toISOString()
+    const nextEvent = { details, eventType, occurredAt }
+
+    setProctorEvents((current) => [...current, nextEvent])
+
     await logProctorEvent({
-      details,
-      eventType,
+      ...nextEvent,
       examId: activeExam.id,
-      occurredAt: new Date().toISOString(),
       student: user?.name || 'Student',
       studentEmail: user.email,
     })
@@ -101,6 +105,7 @@ export default function StudentExamPage({ exams, onSubmitResult, questions, resu
       student: user?.name || 'Student',
       studentEmail: user?.email || '',
       responses,
+      proctorEvents,
     })
 
     if (result.success) {

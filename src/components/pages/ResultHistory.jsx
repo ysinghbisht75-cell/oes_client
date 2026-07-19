@@ -77,6 +77,20 @@ export default function Results({ changeResultPublication, results }) {
                       </button>
                     </div>
 
+                    <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Behavior Summary</p>
+                      <p className="mt-2 text-sm text-slate-700">{result.proctorSummary || 'No suspicious behavior detected.'}</p>
+                      {Array.isArray(result.proctorEvents) && result.proctorEvents.length > 0 ? (
+                        <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-600">
+                          {result.proctorEvents.map((event, index) => (
+                            <li key={`${event.eventType}-${index}`}>
+                              {event.eventType}{event.details ? ` — ${event.details}` : ''}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : null}
+                    </div>
+
                     {Array.isArray(result.answers) && result.answers.length > 0 ? (
                       <details className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
                         <summary className="cursor-pointer text-sm font-semibold text-slate-800">
