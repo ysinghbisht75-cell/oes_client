@@ -1,10 +1,11 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import CameraProctorPanel from '../exam/CameraProctorPanel.jsx'
 import ExamHeader from '../exam/ExamHeader.jsx'
 import ExamQuestionPanel from '../exam/ExamQuestionPanel.jsx'
 import ExamStatusAlerts from '../exam/ExamStatusAlerts.jsx'
 import FocusLockOverlay from '../exam/FocusLockOverlay.jsx'
+import { useExamTimer } from '../../hooks/useExamTimer.js'
 import { logProctorEvent } from '../../services/proctorService.js'
 import { useExamProtection } from '../../utils/examProtection.js'
 import { randomizeExamQuestions } from '../../utils/randomizeExam.js'
@@ -69,28 +70,7 @@ export default function StudentExamPage({ exams, onSubmitResult, questions, resu
     [examId, results, user?.email],
   )
 
-  const requestFullscreen = async () => {
-    await requestFullscreenAgain()
-    if (!document.fullscreenElement) {
-      setFeedback('Your browser blocked fullscreen. Use F11 or click the browser prompt to continue.')
-    }
-  }
-
-  const goToPreviousQuestion = () => {
-    setCurrentQuestionIndex((current) => Math.max(0, current - 1))
-  }
-
-  const goToNextQuestion = () => {
-    setCurrentQuestionIndex((current) => Math.min(activeQuestions.length - 1, current + 1))
-  }
-
-  const handleAnswerChange = (questionId, value) => {
-    setAnswers((current) => ({ ...current, [questionId]: value }))
-  }
-
-  const handleSubmit = async (event) => {
-    event.preventDefault()
-
+  const submitExam = useCallback(async ({ forceSubmit = false } = {}) => {
     if (!activeExam || activeQuestions.length === 0) {
       setFeedback('This exam is not available or has no questions yet.')
       return
@@ -101,7 +81,7 @@ export default function StudentExamPage({ exams, onSubmitResult, questions, resu
       return
     }
 
-    if (!cameraReady) {
+    if (!forceSubmit && !cameraReady) {
       setFeedback('Camera must stay on before you can submit this exam.')
       return
     }
@@ -132,6 +112,50 @@ export default function StudentExamPage({ exams, onSubmitResult, questions, resu
 
     setFeedback(result.error)
     setIsSubmitting(false)
+  }, [
+    activeExam,
+    activeQuestions,
+    answers,
+    cameraReady,
+    hasAlreadyTaken,
+    navigate,
+    onSubmitResult,
+    proctorEvents,
+    user?.email,
+    user?.name,
+  ])
+
+  const remainingSeconds = useExamTimer({
+    durationMinutes: activeExam?.duration,
+    isActive: Boolean(activeExam) && !hasAlreadyTaken && !isSubmitting,
+    onTimeUp: () => {
+      setFeedback('Time is up. Submitting your exam automatically...')
+      void submitExam({ forceSubmit: true })
+    },
+  })
+
+  const requestFullscreen = async () => {
+    await requestFullscreenAgain()
+    if (!document.fullscreenElement) {
+      setFeedback('Your browser blocked fullscreen. Use F11 or click the browser prompt to continue.')
+    }
+  }
+
+  const goToPreviousQuestion = () => {
+    setCurrentQuestionIndex((current) => Math.max(0, current - 1))
+  }
+
+  const goToNextQuestion = () => {
+    setCurrentQuestionIndex((current) => Math.min(activeQuestions.length - 1, current + 1))
+  }
+
+  const handleAnswerChange = (questionId, value) => {
+    setAnswers((current) => ({ ...current, [questionId]: value }))
+  }
+
+  const handleSubmit = (event) => {
+    event.preventDefault()
+    void submitExam()
   }
 
   if (!activeExam) {
@@ -169,7 +193,11 @@ export default function StudentExamPage({ exams, onSubmitResult, questions, resu
         isFullscreen={isFullscreen}
         requestFullscreen={requestFullscreen}
       />
-      <ExamHeader exam={activeExam} questionCount={activeQuestions.length} />
+      <ExamHeader
+        exam={activeExam}
+        questionCount={activeQuestions.length}
+        remainingSeconds={remainingSeconds}
+      />
 
       <div className="grid gap-6 lg:grid-cols-[1.6fr_0.8fr]">
         <ExamQuestionPanel
