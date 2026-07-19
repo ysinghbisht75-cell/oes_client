@@ -9,6 +9,8 @@ export function useExamProtection({ onViolation } = {}) {
   const streamRef = useRef(null)
   const lastEventAtRef = useRef({})
   const onViolationRef = useRef(onViolation)
+  const lastFrameSignatureRef = useRef('')
+  const repeatedFrameCountRef = useRef(0)
 
   useEffect(() => {
     onViolationRef.current = onViolation
@@ -41,7 +43,12 @@ export function useExamProtection({ onViolation } = {}) {
     }
 
     const handleFullscreenChange = () => {
-      setIsFullscreen(Boolean(document.fullscreenElement))
+      const fullscreenActive = Boolean(document.fullscreenElement)
+      setIsFullscreen(fullscreenActive)
+
+      if (!fullscreenActive) {
+        reportViolation('fullscreen_exit')
+      }
     }
 
     const handleVisibilityChange = () => {
@@ -96,6 +103,17 @@ export function useExamProtection({ onViolation } = {}) {
 
         const [track] = stream.getVideoTracks()
         if (track) {
+          track.addEventListener('mute', () => {
+            setCameraReady(false)
+            setCameraError('Camera video is not available.')
+            reportViolation('camera_muted')
+          })
+
+          track.addEventListener('unmute', () => {
+            setCameraReady(true)
+            setCameraError('')
+          })
+
           track.addEventListener('ended', () => {
             setCameraReady(false)
             setCameraError('Camera disconnected during exam.')
@@ -109,13 +127,90 @@ export function useExamProtection({ onViolation } = {}) {
       }
     }
 
+    const monitorCamera = () => {
+      const video = videoRef.current
+      const [track] = streamRef.current?.getVideoTracks() || []
+
+      if (!video || !track) {
+        return
+      }
+
+      if (track.readyState !== 'live' || track.muted || !track.enabled) {
+        setCameraReady(false)
+        setCameraError('Camera must stay active during the exam.')
+        reportViolation('camera_inactive', track.readyState)
+        return
+      }
+
+      if (video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA || !video.videoWidth || !video.videoHeight) {
+        setCameraReady(false)
+        setCameraError('Camera video is not being detected.')
+        reportViolation('camera_no_video')
+        return
+      }
+
+      const canvas = document.createElement('canvas')
+      const width = 32
+      const height = 24
+      canvas.width = width
+      canvas.height = height
+      const context = canvas.getContext('2d', { willReadFrequently: true })
+
+      if (!context) {
+        return
+      }
+
+      context.drawImage(video, 0, 0, width, height)
+      const pixels = context.getImageData(0, 0, width, height).data
+      let brightnessTotal = 0
+      let signature = ''
+
+      for (let index = 0; index < pixels.length; index += 16) {
+        const brightness = Math.round((pixels[index] + pixels[index + 1] + pixels[index + 2]) / 3)
+        brightnessTotal += brightness
+        signature += Math.round(brightness / 16).toString(16)
+      }
+
+      const averageBrightness = brightnessTotal / (pixels.length / 16)
+
+      if (averageBrightness < 6) {
+        setCameraReady(false)
+        setCameraError('Camera feed is too dark or blocked.')
+        reportViolation('camera_blocked')
+        return
+      }
+
+      if (signature === lastFrameSignatureRef.current) {
+        repeatedFrameCountRef.current += 1
+      } else {
+        repeatedFrameCountRef.current = 0
+        lastFrameSignatureRef.current = signature
+      }
+
+      if (repeatedFrameCountRef.current >= 4) {
+        setCameraReady(false)
+        setCameraError('Camera feed appears frozen.')
+        reportViolation('camera_frozen')
+        return
+      }
+
+      setCameraReady(true)
+      setCameraError('')
+    }
+
+    const handleBeforeUnload = () => {
+      reportViolation('page_unload_attempt')
+    }
+
     document.addEventListener('fullscreenchange', handleFullscreenChange)
     document.addEventListener('visibilitychange', handleVisibilityChange)
     document.addEventListener('contextmenu', handleContextMenu)
     document.addEventListener('keydown', handleKeyDown, true)
     window.addEventListener('blur', handleWindowBlur)
+    window.addEventListener('beforeunload', handleBeforeUnload)
     void enterFullscreen()
     void setupCamera()
+    const cameraMonitorId = window.setInterval(monitorCamera, 3000)
 
     return () => {
       document.removeEventListener('fullscreenchange', handleFullscreenChange)
@@ -123,6 +218,8 @@ export function useExamProtection({ onViolation } = {}) {
       document.removeEventListener('contextmenu', handleContextMenu)
       document.removeEventListener('keydown', handleKeyDown, true)
       window.removeEventListener('blur', handleWindowBlur)
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+      window.clearInterval(cameraMonitorId)
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((track) => track.stop())
         streamRef.current = null
