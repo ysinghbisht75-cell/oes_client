@@ -1,4 +1,8 @@
+import { useMemo, useState } from 'react'
+
 export default function Results({ changeResultPublication, results }) {
+  const [selectedExamKey, setSelectedExamKey] = useState('all')
+
   const formatDate = (value) => {
     if (!value) return 'Recently'
 
@@ -6,10 +10,11 @@ export default function Results({ changeResultPublication, results }) {
     return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleDateString()
   }
 
-  const groupedResults = results.reduce((groups, result) => {
+  const groupedResults = useMemo(() => results.reduce((groups, result) => {
     const key = String(result.examId || result.examTitle || 'unknown')
     if (!groups[key]) {
       groups[key] = {
+        key,
         examId: result.examId,
         examTitle: result.examTitle || 'Untitled exam',
         subject: result.subject || '',
@@ -19,11 +24,15 @@ export default function Results({ changeResultPublication, results }) {
 
     groups[key].results.push(result)
     return groups
-  }, {})
+  }, {}), [results])
 
-  const examGroups = Object.values(groupedResults).sort((left, right) =>
+  const allExamGroups = Object.values(groupedResults).sort((left, right) =>
     String(left.examTitle).localeCompare(String(right.examTitle)),
   )
+  const examGroups = selectedExamKey === 'all'
+    ? allExamGroups
+    : allExamGroups.filter((group) => group.key === selectedExamKey)
+  const filteredAttemptCount = examGroups.reduce((total, group) => total + group.results.length, 0)
 
   return (
     <section className="panel">
@@ -31,10 +40,30 @@ export default function Results({ changeResultPublication, results }) {
         <h2 className="text-xl font-bold text-black">
           Student Result History
         </h2>
-        <span className="badge">{results.length} attempts</span>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <label className="text-sm font-semibold text-slate-700" htmlFor="exam-result-filter">
+            Exam
+          </label>
+          <select
+            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 outline-none focus:border-teal-500"
+            id="exam-result-filter"
+            onChange={(event) => setSelectedExamKey(event.target.value)}
+            value={selectedExamKey}
+          >
+            <option value="all">All exams</option>
+            {allExamGroups.map((group) => (
+              <option key={group.key} value={group.key}>
+                {group.examTitle}
+              </option>
+            ))}
+          </select>
+          <span className="badge">{filteredAttemptCount} attempt{filteredAttemptCount === 1 ? '' : 's'}</span>
+        </div>
       </div>
       {results.length === 0 ? (
         <p className="empty-box">No results yet in this session.</p>
+      ) : examGroups.length === 0 ? (
+        <p className="empty-box">No results found for this exam.</p>
       ) : (
         <div className="space-y-5">
           {examGroups.map((group) => (
