@@ -8,7 +8,7 @@ import StudentAnswerPage from './components/pages/StudentAnswerPage.jsx'
 import Student from './components/pages/StudentPortal.jsx'
 import StudentExamPage from './components/pages/StudentExamPage.jsx'
 import { createExam, deleteExam, getExams, updateExam } from './services/examService.js'
-import { createQuestion, getQuestions } from './services/questionService.js'
+import { createQuestion, deleteQuestion, getQuestions, updateQuestion } from './services/questionService.js'
 import { createResult, getResults, updateResult } from './services/resultService.js'
 
 function ProtectedLayout({ children, logout, title, user }) {
@@ -54,6 +54,7 @@ export default function App() {
   const [questions, setQuestions] = useState([])
   const [exams, setExams] = useState([])
   const [editingExamId, setEditingExamId] = useState(null)
+  const [editingQuestionId, setEditingQuestionId] = useState(null)
   const [questionExamId, setQuestionExamId] = useState('')
   const [examForm, setExamForm] = useState({
     title: '',
@@ -86,6 +87,7 @@ export default function App() {
   }
 
   const resetQuestionForm = () => {
+    setEditingQuestionId(null)
     setQuestionForm({
       text: '',
       optionA: '',
@@ -240,7 +242,7 @@ export default function App() {
       return
     }
 
-    const data = await createQuestion({
+    const payload = {
       text: questionForm.text.trim(),
       options: [
         questionForm.optionA.trim(),
@@ -250,11 +252,38 @@ export default function App() {
       ],
       answer: Number(questionForm.answer),
       examId: targetExamId,
-    })
+    }
 
+    if (editingQuestionId) {
+      const data = await updateQuestion(editingQuestionId, payload)
+      setQuestions(data.questions)
+      setExams(data.exams)
+    } else {
+      const data = await createQuestion(payload)
+      setQuestions(data.questions)
+      setExams(data.exams)
+    }
+
+    resetQuestionForm()
+  }
+
+  const startEditQuestion = (question) => {
+    setEditingQuestionId(question.id)
+    setQuestionExamId(Number(question.examId))
+    setQuestionForm({
+      text: question.text,
+      optionA: question.options?.[0] || '',
+      optionB: question.options?.[1] || '',
+      optionC: question.options?.[2] || '',
+      optionD: question.options?.[3] || '',
+      answer: String(question.answer ?? 0),
+    })
+  }
+
+  const removeQuestion = async (questionId) => {
+    const data = await deleteQuestion(questionId)
     setQuestions(data.questions)
     setExams(data.exams)
-    resetQuestionForm()
   }
 
   const submitResult = async (resultData) => {
@@ -303,12 +332,15 @@ export default function App() {
 
   const questionBankProps = {
     addQuestion,
+    editingQuestionId,
     exams,
     questionExamId,
     questionForm,
     questions,
+    removeQuestion,
     setQuestionExamId,
     setQuestionForm,
+    startEditQuestion,
   }
 
   return (

@@ -10,6 +10,7 @@ export default function StudentExamPage({ exams, onSubmitResult, questions, resu
   const [feedback, setFeedback] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [proctorEvents, setProctorEvents] = useState([])
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0)
 
   const recordViolation = async (eventType, details = '') => {
     if (!activeExam || !(user?.email || '').trim()) {
@@ -38,21 +39,16 @@ export default function StudentExamPage({ exams, onSubmitResult, questions, resu
     videoRef,
   } = useExamProtection({ onViolation: recordViolation })
 
-  const activeExam = useMemo(
-    () =>
-      exams.find(
-        (exam) => String(exam.id) === String(examId) && exam.status === 'Published',
-      ),
-    [examId, exams],
+  const activeExam = exams.find(
+    (exam) => String(exam.id) === String(examId) && exam.status === 'Published',
   )
 
-  const activeQuestions = useMemo(
-    () =>
-      activeExam
-        ? questions.filter((question) => (activeExam.questionIds || []).includes(question.id))
-        : [],
-    [activeExam, questions],
-  )
+  const activeQuestions = activeExam
+    ? questions.filter((question) => (activeExam.questionIds || []).includes(question.id))
+    : []
+
+  const currentQuestion = activeQuestions[currentQuestionIndex] || null
+
   const hasAlreadyTaken = useMemo(
     () =>
       results.some(
@@ -68,6 +64,14 @@ export default function StudentExamPage({ exams, onSubmitResult, questions, resu
     if (!document.fullscreenElement) {
       setFeedback('Your browser blocked fullscreen. Use F11 or click the browser prompt to continue.')
     }
+  }
+
+  const goToPreviousQuestion = () => {
+    setCurrentQuestionIndex((current) => Math.max(0, current - 1))
+  }
+
+  const goToNextQuestion = () => {
+    setCurrentQuestionIndex((current) => Math.min(activeQuestions.length - 1, current + 1))
   }
 
   const handleAnswerChange = (questionId, value) => {
@@ -168,19 +172,6 @@ export default function StudentExamPage({ exams, onSubmitResult, questions, resu
         </div>
       ) : null}
 
-      <div className="mb-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
-        <div className="mb-3 flex items-center justify-between">
-          <p className="text-sm font-semibold text-slate-900">Camera Proctor</p>
-          <span className={cameraReady ? 'badge' : 'inline-flex min-h-7 items-center rounded-full bg-rose-100 px-3 text-xs font-bold text-rose-700'}>
-            {cameraReady ? 'Camera active' : 'Camera required'}
-          </span>
-        </div>
-        <div className="overflow-hidden rounded-lg border border-slate-200 bg-black">
-          <video ref={videoRef} autoPlay muted playsInline className="h-48 w-full object-cover" />
-        </div>
-        {cameraError ? <p className="mt-2 text-sm font-semibold text-rose-700">{cameraError}</p> : null}
-      </div>
-
       <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-2xl font-bold text-slate-950">{activeExam.title}</h2>
@@ -192,51 +183,83 @@ export default function StudentExamPage({ exams, onSubmitResult, questions, resu
         </div>
       </div>
 
-      <form className="space-y-4" onSubmit={handleSubmit}>
-        {activeQuestions.length > 0 ? (
-          activeQuestions.map((question, index) => (
-            <fieldset
-              className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
-              key={question.id}
-            >
-              <legend className="px-1 text-sm font-bold text-slate-900">
-                Question {index + 1}
-              </legend>
-              <p className="mt-2 font-medium text-slate-800">{question.text}</p>
-              <div className="mt-4 grid gap-2 sm:grid-cols-2">
-                {question.options.map((option, optionIndex) => (
-                  <label
-                    className="flex cursor-pointer items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 hover:border-teal-300 hover:bg-teal-50"
-                    key={option}
-                  >
-                    <input
-                      checked={String(answers[question.id]) === String(optionIndex)}
-                      className="h-4 w-4 accent-teal-700"
-                      name={`question-${question.id}`}
-                      onChange={() => handleAnswerChange(question.id, optionIndex)}
-                      type="radio"
-                    />
-                    <span>{option}</span>
-                  </label>
-                ))}
+      <div className="grid gap-6 lg:grid-cols-[1.6fr_0.8fr]">
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <form className="space-y-4" onSubmit={handleSubmit}>
+            {currentQuestion ? (
+              <fieldset className="rounded-2xl border border-slate-200 bg-white p-4" key={currentQuestion.id}>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <legend className="px-1 text-sm font-bold text-slate-900">
+                    Question {currentQuestionIndex + 1} of {activeQuestions.length}
+                  </legend>
+                  <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+                    {answers[currentQuestion.id] !== undefined ? 'Answered' : 'Unanswered'}
+                  </span>
+                </div>
+                <p className="mt-3 font-medium text-slate-800">{currentQuestion.text}</p>
+                <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                  {currentQuestion.options.map((option, optionIndex) => (
+                    <label
+                      className="flex cursor-pointer items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 hover:border-teal-300 hover:bg-teal-50"
+                      key={option}
+                    >
+                      <input
+                        checked={String(answers[currentQuestion.id]) === String(optionIndex)}
+                        className="h-4 w-4 accent-teal-700"
+                        name={`question-${currentQuestion.id}`}
+                        onChange={() => handleAnswerChange(currentQuestion.id, optionIndex)}
+                        type="radio"
+                      />
+                      <span>{option}</span>
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+            ) : (
+              <p className="empty-box">This exam has no questions yet.</p>
+            )}
+
+            {feedback ? <p className="text-sm font-semibold text-slate-700">{feedback}</p> : null}
+
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+              <div className="flex flex-wrap gap-2">
+                <button className="btn-light" disabled={currentQuestionIndex === 0} onClick={goToPreviousQuestion} type="button">
+                  Previous
+                </button>
+                <button
+                  className="btn-light"
+                  disabled={currentQuestionIndex >= activeQuestions.length - 1}
+                  onClick={goToNextQuestion}
+                  type="button"
+                >
+                  Next
+                </button>
               </div>
-            </fieldset>
-          ))
-        ) : (
-          <p className="empty-box">This exam has no questions yet.</p>
-        )}
-
-        {feedback ? <p className="text-sm font-semibold text-slate-700">{feedback}</p> : null}
-
-        <div className="flex flex-wrap justify-end gap-3 pt-2">
-          <Link className="btn-light" to="/student">
-            Cancel
-          </Link>
-          <button className="btn" type="submit" disabled={isSubmitting}>
-            {isSubmitting ? 'Submitting...' : 'Submit Exam'}
-          </button>
+              <div className="flex flex-wrap justify-end gap-3">
+                <Link className="btn-light" to="/student">
+                  Cancel
+                </Link>
+                <button className="btn" type="submit" disabled={isSubmitting}>
+                  {isSubmitting ? 'Submitting...' : 'Submit Exam'}
+                </button>
+              </div>
+            </div>
+          </form>
         </div>
-      </form>
+
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <p className="text-sm font-semibold text-slate-900">Camera Proctor</p>
+            <span className={cameraReady ? 'badge' : 'inline-flex min-h-7 items-center rounded-full bg-rose-100 px-3 text-xs font-bold text-rose-700'}>
+              {cameraReady ? 'Camera active' : 'Camera required'}
+            </span>
+          </div>
+          <div className="overflow-hidden rounded-lg border border-slate-200 bg-black">
+            <video ref={videoRef} autoPlay muted playsInline className="h-48 w-full object-cover" />
+          </div>
+          {cameraError ? <p className="mt-2 text-sm font-semibold text-rose-700">{cameraError}</p> : null}
+        </div>
+      </div>
 
       {hasTabSwitchViolation ? (
         <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/80 p-4 text-center text-white">

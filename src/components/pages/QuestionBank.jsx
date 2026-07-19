@@ -2,12 +2,15 @@ const questionOptions = ['optionA', 'optionB', 'optionC', 'optionD']
 
 export default function QuestionBankPage({
   addQuestion,
+  editingQuestionId,
   exams,
   questionExamId,
   questionForm,
   questions,
+  removeQuestion,
   setQuestionExamId,
   setQuestionForm,
+  startEditQuestion,
 }) {
   const updateForm = (setter, form, name, value) =>
     setter({ ...form, [name]: value })
@@ -100,7 +103,7 @@ export default function QuestionBankPage({
         </label>
 
         <button className="btn w-full sm:w-fit" type="submit">
-          Add Question
+          {editingQuestionId ? 'Update Question' : 'Add Question'}
         </button>
       </form>
 
@@ -137,6 +140,15 @@ export default function QuestionBankPage({
                     ? `Exam: ${linkedExam.title}`
                     : 'No exam linked'}
                 </small>
+
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <button className="btn-light" type="button" onClick={() => startEditQuestion(question)}>
+                    Edit
+                  </button>
+                  <button className="btn-light" type="button" onClick={() => removeQuestion(question.id)}>
+                    Delete
+                  </button>
+                </div>
               </article>
             )
           })}
