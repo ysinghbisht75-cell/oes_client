@@ -9,7 +9,10 @@ export function formatRemainingTime(seconds) {
 }
 
 export function useExamTimer({ durationMinutes, isActive, onTimeUp }) {
-  const [remainingSeconds, setRemainingSeconds] = useState(0)
+  const [remainingSeconds, setRemainingSeconds] = useState(
+    () => Math.max(0, Number(durationMinutes) || 0) * 60,
+  )
+  const hasDuration = Number(durationMinutes) > 0
 
   useEffect(() => {
     const resetTimerId = window.setTimeout(() => {
@@ -30,10 +33,10 @@ export function useExamTimer({ durationMinutes, isActive, onTimeUp }) {
   }, [isActive, remainingSeconds])
 
   useEffect(() => {
-    if (isActive && remainingSeconds === 0) {
+    if (isActive && hasDuration && remainingSeconds === 0) {
       onTimeUp()
     }
-  }, [isActive, onTimeUp, remainingSeconds])
+  }, [hasDuration, isActive, onTimeUp, remainingSeconds])
 
   return remainingSeconds
 }
